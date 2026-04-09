@@ -144,8 +144,6 @@ A Streamlit dashboard provides:
 
 ## 📂 Project Structure
 
-## Project Structure
-
 ```
 Agentic Stock Predictor/
 │
