@@ -1,0 +1,15 @@
+pandas
+numpy
+tensorflow
+xgboost
+scikit-learn
+matplotlib
+bdshare
+pygooglenews
+vaderSentiment
+google-generativeai
+streamlit
+python-dateutil
+dateparser
+tqdm
+nltk
