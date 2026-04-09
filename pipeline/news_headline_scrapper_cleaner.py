@@ -25,13 +25,12 @@ def is_relevant_headline(text):
     stop_words = set(stopwords.words('english'))
     lemmatizer = WordNetLemmatizer()
     tokenizer = RegexpTokenizer(r'\w+')
-    # Clean string: lowercase and remove non-alphabetic
     text = re.sub(r'http\S+|[^a-z\s]', '', text.lower())
     words = [lemmatizer.lemmatize(w) for w in tokenizer.tokenize(text) if w not in stop_words and len(w) > 2]
     return len(words) >= 3
 
-def get_cleaned_bd_news(keywords):
-    # Dynamic pathing for your project structure
+def get_cleaned_bd_news(symbol, company_full_name):
+    # project data path
     project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     data_dir = os.path.join(project_root, "data")
     if not os.path.exists(data_dir): os.makedirs(data_dir)
@@ -39,12 +38,10 @@ def get_cleaned_bd_news(keywords):
     gn = GoogleNews(lang='en', country='BD')
     all_articles = []
     seen_urls = set()
-    primary_company = keywords[0]
-
-    # --- RESTORED TIME CHUNKING (The secret to more data) ---
+    
+    # --- Time chunking: 2 years weekly ---
     today = datetime.now()
     start_date = today - relativedelta(years=2)
-    
     current = start_date
     date_chunks = []
     while current < today:
@@ -52,13 +49,12 @@ def get_cleaned_bd_news(keywords):
         date_chunks.append((current, min(next_week, today)))
         current = next_week
 
-    print(f"📊 Scraping 2 years of news for: {primary_company}...")
+    print(f"📊 Scraping 2 years of news for: {company_full_name}...")
 
     for chunk_start, chunk_end in tqdm(date_chunks, desc="Fetching Weeks"):
         from_date = chunk_start.strftime('%Y-%m-%d')
         to_date = chunk_end.strftime('%Y-%m-%d')
-        # Optimized query
-        query = f'"{primary_company}" AND (Bangladesh OR DSE OR Stock)'
+        query = f'"{company_full_name}" AND (Bangladesh OR DSE OR Stock)'
         
         try:
             search = gn.search(query, from_=from_date, to_=to_date)
@@ -73,34 +69,27 @@ def get_cleaned_bd_news(keywords):
                                 'Headline': entry.title,
                                 'URL': entry.link
                             })
-            # Small delay to avoid blocking
             time.sleep(random.uniform(0.1, 0.2))
         except:
             continue
 
     if all_articles:
         df = pd.DataFrame(all_articles)
-        
-        # 1. Ensure the company is actually in the headline
-        df = df[df['Headline'].str.contains(primary_company, case=False, na=False)]
-        
-        # 2. Drop duplicates
+        df = df[df['Headline'].str.contains(company_full_name, case=False, na=False)]
         df = df.drop_duplicates(subset=['Headline'])
-        
-        # 3. NLP Relevance Check
         print("🧹 Applying NLP cleaning...")
         df = df[df['Headline'].apply(is_relevant_headline)].reset_index(drop=True)
-        
-        # Save to your standardized data path
-        output_file = os.path.join(data_dir, f"{primary_company.lower().replace(' ', '')}_news_data.csv")
+
+        # --- Save file using symbol ---
+        output_file = os.path.join(data_dir, f"{symbol.lower()}_news_data.csv")
         df.to_csv(output_file, index=False)
-        
-        print(f"✅ PROCESS COMPLETE: Found {len(df)} relevant articles.")
+        print(f"✅ PROCESS COMPLETE: Found {len(df)} relevant articles. Saved as {output_file}")
         return df
     
     print("❌ No articles found.")
     return None
 
 if __name__ == "__main__":
-    company_name = input("Enter the company name to scrape: ")
-    get_cleaned_bd_news([company_name])
+    company_name = input("Enter the company full name to scrape: ")
+    symbol = input("Enter the company symbol: ")
+    get_cleaned_bd_news(symbol, company_name)
