@@ -1,7 +1,7 @@
 streamlit
 pandas
 numpy
-tensorflow
+tensorflow==2.15.0
 xgboost
 scikit-learn
 matplotlib
@@ -9,7 +9,6 @@ plotly
 bdshare
 pygooglenews
 vaderSentiment
-google-generativeai
 python-dotenv
 python-dateutil
 dateparser
