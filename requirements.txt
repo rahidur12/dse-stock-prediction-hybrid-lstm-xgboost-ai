@@ -7,6 +7,7 @@ scikit-learn
 matplotlib
 plotly
 bdshare
+feedparser>=6.0.8
 pygooglenews
 vaderSentiment
 python-dotenv
@@ -14,3 +15,4 @@ python-dateutil
 dateparser
 tqdm
 nltk
+setuptools
