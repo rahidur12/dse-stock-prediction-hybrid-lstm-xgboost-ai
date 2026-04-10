@@ -8,7 +8,8 @@ import re
 import time
 import random
 import nltk
-from pygooglenews import GoogleNews
+#from pygooglenews import GoogleNews
+from gnews import GNews
 from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
 import dateparser

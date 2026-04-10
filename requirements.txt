@@ -7,8 +7,7 @@ scikit-learn
 matplotlib
 plotly
 bdshare
-feedparser>=6.0.8
-pygooglenews
+gnews
 vaderSentiment
 python-dotenv
 python-dateutil
