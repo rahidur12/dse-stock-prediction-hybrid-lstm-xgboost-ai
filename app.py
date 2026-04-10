@@ -5,19 +5,26 @@ import plotly.graph_objects as go
 import os
 import requests
 import re
+import nltk
 from dotenv import load_dotenv
 from datetime import datetime
 from bdshare import get_current_trade_data
 
-# Note: Ensure you have updated your prediction logic to use the right libraries
+# Prediction logic from your local module
 from interference.predict_gp import get_prediction
 
 # -----------------------------
-# CONFIG
+# CONFIG & ASSETS
 # -----------------------------
 st.set_page_config(page_title="DSE Agentic Predictor", layout="wide")
 load_dotenv()
 API_KEY = os.getenv("OPENROUTER_API_KEY")
+
+# Ensure NLTK data is available for the background sentiment processing
+try:
+    nltk.data.find('tokenizers/punkt')
+except LookupError:
+    nltk.download('punkt', quiet=True)
 
 # --- Custom CSS for Styling ---
 st.markdown("""
@@ -41,8 +48,32 @@ st.markdown("""
         color: #aaa;
         margin-bottom: 15px;
     }
+    .stMetric {
+        background-color: #0e1117;
+        padding: 15px;
+        border-radius: 10px;
+        border: 1px solid #333;
+    }
 </style>
 """, unsafe_allow_html=True)
+
+# -----------------------------
+# UTILITY: ROBUST DATA EXTRACTION
+# -----------------------------
+def extract_float(val):
+    """Recursively extracts a float from nested arrays, lists, or strings."""
+    if val is None:
+        return 0.0
+    if isinstance(val, (list, np.ndarray)):
+        if len(val) == 0: return 0.0
+        return extract_float(val[0])
+    try:
+        # Handle strings with commas (common in DSE data)
+        if isinstance(val, str):
+            val = val.replace(',', '')
+        return float(val)
+    except (TypeError, ValueError):
+        return 0.0
 
 # -----------------------------
 # INDEPENDENT AI RESEARCH FUNCTION
@@ -58,7 +89,7 @@ def get_ai_independent_forecast(symbol, price, sentiment_avg, weekly_trend):
         Act as a Senior Market Researcher for the Dhaka Stock Exchange.
         
         STRICT MISSION: Provide an independent numerical forecast for {symbol} tomorrow.
-        DO NOT guess what other models say. Use these inputs:
+        Use these inputs:
         - Current Price (LTP): {price} BDT
         - 7-Day Sentiment: {sentiment_avg:.2f}
         - Recent Trend: {weekly_trend}
@@ -85,42 +116,42 @@ def get_ai_independent_forecast(symbol, price, sentiment_avg, weekly_trend):
 def fetch_live_dse(symbol):
     try:
         df_live = get_current_trade_data()
-        # More robust symbol matching
         search_sym = symbol.upper().strip()
         row = df_live[df_live['symbol'].str.upper() == search_sym]
         
         if not row.empty:
             res = row.iloc[0]
-            ltp = float(str(res.get('ltp', 0)).replace(',', ''))
-            ycp = float(str(res.get('ycp', 0)).replace(',', ''))
-            raw_open = float(str(res.get('open', 0)).replace(',', ''))
+            ltp = extract_float(res.get('ltp', 0))
+            ycp = extract_float(res.get('ycp', 0))
+            raw_open = extract_float(res.get('open', 0))
             
             return {
                 "Open": raw_open if raw_open > 0 else ycp,
-                "High": float(str(res.get('high', 0)).replace(',', '')),
-                "Low": float(str(res.get('low', 0)).replace(',', '')),
+                "High": extract_float(res.get('high', 0)),
+                "Low": extract_float(res.get('low', 0)),
                 "Close": ltp,
-                "Volume": float(str(res.get('volume', 0)).replace(',', '')),
+                "Volume": extract_float(res.get('volume', 0)),
                 "Time": datetime.now().strftime("%I:%M %p")
             }
-    except Exception as e:
-        st.error(f"Live Fetch Error: {e}")
+    except Exception:
         return None
     return None
 
 # -----------------------------
-# UI LOGIC
+# MAIN UI
 # -----------------------------
 st.title("📈 DSE Agentic Stock Predictor")
+st.caption("Hybrid LSTM + XGBOOST Analytics for Dhaka Stock Exchange")
 st.markdown("---")
 
 col1, col2 = st.columns([1, 2])
 
-if "last_ticker" not in st.session_state: st.session_state.last_ticker = None
+if "last_ticker" not in st.session_state: 
+    st.session_state.last_ticker = None
 
 with col1:
     st.subheader("Controls")
-    symbol = st.selectbox("Select Ticker", ["GP", "BRACBANK"])
+    symbol = st.selectbox("Select Ticker", ["GP", "BRACBANK", "BEXIMCO"])
 
     if st.session_state.last_ticker != symbol:
         st.session_state.last_ticker = symbol
@@ -134,124 +165,106 @@ with col1:
             st.success(f"Synced at {live_data['Time']}")
 
     if st.button("🔮 Predict Tomorrow", use_container_width=True):
-        fresh = fetch_live_dse(symbol)
-        if fresh: st.session_state[f"{symbol}_live"] = fresh
-        
-        # Get raw outputs
-        pred_raw, csv_close_raw = get_prediction(symbol)
-        live = st.session_state.get(f"{symbol}_live")
-        
-        # --- TYPE SAFETY FIX ---
-        # 1. Flatten pred_value (it's often array([[x]]) )
-        if isinstance(pred_raw, (np.ndarray, list)):
-            pred_value = float(np.array(pred_raw).flatten()[0])
-        else:
-            pred_value = float(pred_raw)
+        with st.spinner("Analyzing Market Patterns..."):
+            fresh = fetch_live_dse(symbol)
+            if fresh: st.session_state[f"{symbol}_live"] = fresh
             
-        # 2. Flatten current_close
-        current_close = float(live["Close"] if live else csv_close_raw)
-        
-        # 3. Calculate difference safely
-        diff = pred_value - current_close
-        
-        st.metric("Last Close", f"{current_close:.2f} BDT")
-        st.metric("Model Prediction", f"{pred_value:.2f} BDT", delta=f"{diff:.2f} BDT")
+            # Fetch raw prediction
+            pred_raw, csv_close_raw = get_prediction(symbol)
+            live = st.session_state.get(f"{symbol}_live")
+            
+            # Safe extraction
+            pred_value = extract_float(pred_raw)
+            current_close = extract_float(live["Close"] if live else csv_close_raw)
+            
+            diff = pred_value - current_close
+            
+            st.metric("Last Close", f"{current_close:.2f} BDT")
+            st.metric("Model Prediction", f"{pred_value:.2f} BDT", delta=f"{diff:.2f} BDT")
 
 with col2:
-    st.subheader("Price History")
+    st.subheader("Market Activity")
     data_path = f"data/{symbol.lower()}_final_dataset.csv"
     if os.path.exists(data_path):
         df = pd.read_csv(data_path)
         live = st.session_state.get(f"{symbol}_live", {})
         
-        disp_open = float(live.get("Open", df['Open'].iloc[-1]))
-        disp_high = float(live.get("High", df['High'].iloc[-1]))
-        disp_low = float(live.get("Low", df['Low'].iloc[-1]))
-        disp_close = float(live.get("Close", df['Close'].iloc[-1]))
-        disp_vol = float(live.get("Volume", df['Volume'].iloc[-1]))
-        disp_time = live.get("Time", "Manual Entry / Last Sync")
+        d_open = extract_float(live.get("Open", df['Open'].iloc[-1]))
+        d_high = extract_float(live.get("High", df['High'].iloc[-1]))
+        d_low = extract_float(live.get("Low", df['Low'].iloc[-1]))
+        d_close = extract_float(live.get("Close", df['Close'].iloc[-1]))
+        d_vol = extract_float(live.get("Volume", df['Volume'].iloc[-1]))
+        d_time = live.get("Time", "Daily Session")
         
-        st.caption(f"📅 Data Freshness: {disp_time}")
+        st.caption(f"📅 Status: {d_time}")
         m1, m2, m3, m4, m5 = st.columns(5)
-        m1.metric("Open", f"{disp_open:.2f}")
-        m2.metric("High", f"{disp_high:.2f}")
-        m3.metric("Low", f"{disp_low:.2f}")
-        m4.metric("Close", f"{disp_close:.2f}")
-        m5.metric("Volume", f"{int(disp_vol):,}")
+        m1.metric("Open", f"{d_open:.2f}")
+        m2.metric("High", f"{d_high:.2f}")
+        m3.metric("Low", f"{d_low:.2f}")
+        m4.metric("Close", f"{d_close:.2f}")
+        m5.metric("Volume", f"{int(d_vol):,}")
 
+        # Visualization
         chart_df = df.tail(30).copy()
         if live:
             live_row = pd.DataFrame([{
-                'Date': 'Live', 
-                'Open': disp_open, 
-                'High': disp_high, 
-                'Low': disp_low, 
-                'Close': disp_close
+                'Date': 'Live', 'Open': d_open, 'High': d_high, 'Low': d_low, 'Close': d_close
             }])
             chart_df = pd.concat([chart_df, live_row], ignore_index=True)
 
         fig = go.Figure(data=[go.Candlestick(
-            x=chart_df['Date'], 
-            open=chart_df['Open'], 
-            high=chart_df['High'], 
-            low=chart_df['Low'], 
-            close=chart_df['Close']
+            x=chart_df['Date'], open=chart_df['Open'], high=chart_df['High'], 
+            low=chart_df['Low'], close=chart_df['Close']
         )])
-        fig.update_layout(template="plotly_dark", height=400, margin=dict(l=0, r=0, t=10, b=0), xaxis_rangeslider_visible=False)
+        fig.update_layout(template="plotly_dark", height=380, margin=dict(l=0, r=0, t=0, b=0), xaxis_rangeslider_visible=False)
         st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.warning(f"Historical dataset not found for {symbol}. Run scraper first.")
 
 # -----------------------------
-# INDEPENDENT AI RESEARCH SECTION
+# AI RESEARCH SECTION
 # -----------------------------
 st.markdown("---")
-if st.button("🤖 Get AI Independent Research & Prediction", use_container_width=True):
+if st.button("🤖 Get AI Independent Research", use_container_width=True):
     live = st.session_state.get(f"{symbol}_live", {})
-    price = live.get("Close", 0)
+    price = extract_float(live.get("Close", 0))
     
     if price > 0:
-        with st.spinner("AI performing independent research..."):
-            # Ensure df is defined from the History section
+        with st.spinner("AI performing deep analysis..."):
+            # Sentiment and Trend Calculation
             if 'df' in locals():
-                avg_sent = df['vader_score'].tail(7).mean()
+                avg_sent = df['vader_score'].tail(7).mean() if 'vader_score' in df.columns else 0.0
                 weekly_trend = "Bullish" if df['Close'].iloc[-1] > df['Close'].iloc[-7] else "Bearish"
             else:
-                avg_sent = 0.0
-                weekly_trend = "Unknown"
+                avg_sent, weekly_trend = 0.0, "Neutral"
 
             ai_raw_text = get_ai_independent_forecast(symbol, price, avg_sent, weekly_trend)
-            
-            # Predict value handling for comparative section
             pred_raw, _ = get_prediction(symbol)
-            model_pred = float(np.array(pred_raw).flatten()[0]) if isinstance(pred_raw, (np.ndarray, list)) else float(pred_raw)
+            model_pred = extract_float(pred_raw)
             
-            # Display Stylish AI Card
+            # UI Card
             st.markdown(f"""
             <div class="ai-card">
                 <div class="ai-header">🧠 AI Independent Research</div>
-                <div class="ai-sub">Advanced Market Analysis Persona.</div>
-                <div style="font-size: 15px; line-height: 1.6;">
-                    {ai_raw_text}
-                </div>
+                <div class="ai-sub">Deep sentiment analysis of recent DSE news.</div>
+                <div style="font-size: 15px; line-height: 1.6;">{ai_raw_text}</div>
             </div>
             """, unsafe_allow_html=True)
             
-            st.subheader("📊 Comparative Forecast Summary")
+            st.subheader("📊 Comparison: ML vs. AI Research")
             left, right = st.columns(2)
             
             with left:
-                st.markdown("### 🤖 Your ML Model")
                 m_diff = model_pred - price
-                st.metric("Model Target", f"{model_pred:.2f} BDT", delta=f"{m_diff:.2f} BDT")
+                st.metric("Hybrid Model Target", f"{model_pred:.2f} BDT", delta=f"{m_diff:.2f} BDT")
                 
             with right:
-                st.markdown("### 🧠 AI Independent Outlook")
                 ai_match = re.search(r"AI_TARGET:\s*([\d\.]+)", ai_raw_text)
                 if ai_match:
                     ai_val = float(ai_match.group(1))
                     a_diff = ai_val - price
-                    st.metric("AI Target", f"{ai_val:.2f} BDT", delta=f"{a_diff:.2f} BDT")
+                    st.metric("AI Researcher Target", f"{ai_val:.2f} BDT", delta=f"{a_diff:.2f} BDT")
                 else:
-                    st.info("Analysis complete. Check 'Numerical' section in text above for specific targets.")
-                
+                    st.info("Numerical target hidden in text analysis above.")
     else:
-        st.error("Please sync live data first to provide a baseline for the AI.")
+        st.error("Please sync live data first.")
