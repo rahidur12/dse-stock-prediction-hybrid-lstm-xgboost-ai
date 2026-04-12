@@ -27,8 +27,10 @@ def get_prediction(symbol="bracbank"):
         
         df = pd.read_csv(data_path)
     except Exception as e:
-        print(f"[ERROR] {e}")  # shows in Streamlit logs
-        return None, None
+        import traceback
+        error_msg = traceback.format_exc()
+        print(error_msg)
+        return error_msg, None
 
     # --- 3. PREPARE INPUT FEATURES ---
     # Features MUST match the order and count used in training

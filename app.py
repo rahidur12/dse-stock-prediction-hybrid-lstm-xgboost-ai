@@ -165,7 +165,11 @@ with col1:
         raw_pred, csv_close = get_prediction(symbol)
 
         # 🔍 ADD THIS LINE HERE
-        st.write("DEBUG OUTPUT:", raw_pred)
+    # SHOW FULL ERROR
+    if isinstance(raw_pred, str):
+        st.error("🚨 FULL ERROR:")
+        st.code(raw_pred)
+        st.stop()
 
         if raw_pred is None:
             st.error("❌ Model loading failed. Check logs.")
