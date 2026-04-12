@@ -1,14 +1,10 @@
-# =============================
-# interference/predict_gp.py (or predict_brac_bank.py)
-# =============================
-
 import pandas as pd
 import numpy as np
-import os       # <--- THIS WAS MISSING
+import os
 import joblib
 import tensorflow as tf
 from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import LSTM, Dense, Input
+from tensorflow.keras.layers import LSTM, Dense, Dropout, Input
 
 def get_prediction(symbol="gp"):
     # --- 1. SETUP PATHS ---
@@ -19,20 +15,19 @@ def get_prediction(symbol="gp"):
 
     # --- 2. LOAD ARTIFACTS ---
     try:
-        # Define the architecture WITHOUT the separate Input layer 
-        # We put the input_shape directly into the LSTM layer
+        # EXACT MATCH to your model_evaluation.py
         model = Sequential([
-            LSTM(64, input_shape=(1, 8), return_sequences=False),
-            Dense(32, activation='relu'),
-            Dense(1)
+            Input(shape=(1, 8)), 
+            LSTM(units=350, return_sequences=False), # Changed 64 -> 350
+            Dropout(0.3),                            # Added Dropout layer
+            Dense(units=1)
         ])
         
         model_path = os.path.join(model_dir, f"{symbol.lower()}_lstm_model.h5")
         
-        # We use by_name=False (default) and ensure the architecture matches
+        # This will now find all 3 layers it expects
         model.load_weights(model_path)
         
-        # Load the rest
         xgb_model = joblib.load(os.path.join(model_dir, f"{symbol.lower()}_xgb_model.pkl"))
         scaler_x = joblib.load(os.path.join(model_dir, f"{symbol.lower()}_scaler_x.pkl"))
         scaler_y = joblib.load(os.path.join(model_dir, f"{symbol.lower()}_scaler_y.pkl"))
@@ -40,7 +35,6 @@ def get_prediction(symbol="gp"):
         df = pd.read_csv(data_path)
         
     except Exception as e:
-        # If it still fails, we'll see exactly why in the Debug Console
         return f"Architecture Error: {str(e)}", 0.0
 
     # --- 3. PREPARE INPUT FEATURES ---
@@ -51,12 +45,9 @@ def get_prediction(symbol="gp"):
 
     recent_data = df[features].tail(1).values 
     scaled_data = scaler_x.transform(recent_data)
-    X_lstm = np.reshape(scaled_data, (scaled_data.shape[0], 1, scaled_data.shape[1]))
 
     # --- 4. HYBRID INFERENCE ---
-    # Use the 'model' we manually built and loaded weights into
-    # We ignore the LSTM trend and go straight to the XGBoost final prediction 
-    # as per your previous logic
+    # XGBoost Prediction (using the 2D scaled data)
     final_scaled_pred = xgb_model.predict(scaled_data)
 
     # --- 5. INVERSE SCALING ---
@@ -64,8 +55,3 @@ def get_prediction(symbol="gp"):
     last_close = df['Close'].iloc[-1]
     
     return round(float(final_price), 2), round(float(last_close), 2)
-
-if __name__ == "__main__":
-    # Quick debug test
-    price, last = get_prediction("bracbank")
-    print(f"Latest Prediction: {price} BDT | Last Close: {last} BDT")
