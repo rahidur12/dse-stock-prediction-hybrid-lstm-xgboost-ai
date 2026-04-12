@@ -27,7 +27,8 @@ def get_prediction(symbol="bracbank"):
         
         df = pd.read_csv(data_path)
     except Exception as e:
-        return f"Error loading models/data: {e}", None
+        print(f"[ERROR] {e}")  # shows in Streamlit logs
+        return None, None
 
     # --- 3. PREPARE INPUT FEATURES ---
     # Features MUST match the order and count used in training

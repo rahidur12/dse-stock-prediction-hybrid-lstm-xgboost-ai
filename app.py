@@ -162,8 +162,16 @@ with col1:
             if fresh: 
                 st.session_state[f"{symbol}_live"] = fresh
             
-            raw_pred, csv_close = get_prediction(symbol)
-            pred_value = to_float(raw_pred)
+        raw_pred, csv_close = get_prediction(symbol)
+
+        # 🔍 ADD THIS LINE HERE
+        st.write("DEBUG OUTPUT:", raw_pred)
+
+        if raw_pred is None:
+            st.error("❌ Model loading failed. Check logs.")
+            pred_value = 0.0
+        else:
+            pred_value = float(raw_pred)
             
             live = st.session_state.get(f"{symbol}_live")
             current_close = to_float(live["Close"] if live else csv_close)
@@ -228,7 +236,10 @@ if st.button("🤖 Get AI Independent Research & Prediction", use_container_widt
 
             ai_raw_text = get_ai_independent_forecast(symbol, price, avg_sent, weekly_trend)
             raw_model_pred, _ = get_prediction(symbol)
-            model_pred = to_float(raw_model_pred)
+        if raw_model_pred is None:
+            model_pred = 0.0
+        else:
+            model_pred = float(raw_model_pred)
             
             st.markdown(f"""
             <div class="ai-card">
