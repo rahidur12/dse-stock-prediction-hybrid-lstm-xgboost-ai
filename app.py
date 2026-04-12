@@ -1,3 +1,7 @@
+# =============================
+# interference/app.py
+# =============================
+
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -5,15 +9,34 @@ import plotly.graph_objects as go
 import os
 import requests
 import re
+import importlib  # Added for dynamic module loading
 from dotenv import load_dotenv
 from datetime import datetime
 from bdshare import get_current_trade_data
 
-# Ensure this import matches your project structure
-try:
-    from interference.predict_gp import get_prediction
-except ImportError as e:
-    st.error(f"Prediction module not found: {e}")
+# -----------------------------
+# DYNAMIC PREDICTION LOADER
+# -----------------------------
+def get_prediction_dynamically(symbol):
+    """Dynamically loads the correct prediction module based on ticker."""
+    try:
+        # Map tickers to their specific script files
+        module_map = {
+            "GP": "interference.predict_gp",
+            "BRACBANK": "interference.predict_brac_bank",
+            "BEXIMCO": "interference.predict_gp" # Fallback to GP logic if BEXIMCO script isn't ready
+        }
+        
+        module_name = module_map.get(symbol.upper(), "interference.predict_gp")
+        # Import the module dynamically
+        module = importlib.import_module(module_name)
+        # Reload to ensure we pick up fresh .h5 changes
+        importlib.reload(module)
+        
+        return module.get_prediction(symbol.lower())
+    except Exception as e:
+        st.error(f"Prediction logic error for {symbol}: {e}")
+        return 0.0, 0.0
 
 # -----------------------------
 # CONFIG
@@ -162,7 +185,8 @@ with col1:
             if fresh: 
                 st.session_state[f"{symbol}_live"] = fresh
             
-            raw_pred, csv_close = get_prediction(symbol)
+            # UPDATED: Use the dynamic loader instead of hardcoded GP import
+            raw_pred, csv_close = get_prediction_dynamically(symbol)
             pred_value = to_float(raw_pred)
             
             live = st.session_state.get(f"{symbol}_live")
@@ -175,7 +199,7 @@ with col1:
 with col2:
     st.subheader("Price History")
     data_path = f"data/{symbol.lower()}_final_dataset.csv"
-    df = None # Initialize to avoid errors in AI section
+    df = None 
     
     if os.path.exists(data_path):
         df = pd.read_csv(data_path)
@@ -219,7 +243,6 @@ if st.button("🤖 Get AI Independent Research & Prediction", use_container_widt
     
     if price > 0:
         with st.spinner("AI performing independent research..."):
-            # Safe calculation for sentiment and trends
             if df is not None:
                 avg_sent = df['vader_score'].tail(7).mean() if 'vader_score' in df.columns else 0.0
                 weekly_trend = "Bullish" if df['Close'].iloc[-1] > df['Close'].iloc[-7] else "Bearish"
@@ -227,7 +250,9 @@ if st.button("🤖 Get AI Independent Research & Prediction", use_container_widt
                 avg_sent, weekly_trend = 0.0, "Neutral"
 
             ai_raw_text = get_ai_independent_forecast(symbol, price, avg_sent, weekly_trend)
-            raw_model_pred, _ = get_prediction(symbol)
+            
+            # UPDATED: Use the dynamic loader here too
+            raw_model_pred, _ = get_prediction_dynamically(symbol)
             model_pred = to_float(raw_model_pred)
             
             st.markdown(f"""
