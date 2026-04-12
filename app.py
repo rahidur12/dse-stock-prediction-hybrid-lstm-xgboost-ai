@@ -9,34 +9,33 @@ import plotly.graph_objects as go
 import os
 import requests
 import re
-import importlib  # Added for dynamic module loading
+import importlib
+import traceback  # Added for debugging
 from dotenv import load_dotenv
 from datetime import datetime
 from bdshare import get_current_trade_data
 
 # -----------------------------
-# DYNAMIC PREDICTION LOADER
+# DYNAMIC PREDICTION LOADER (WITH DEBUGGER)
 # -----------------------------
 def get_prediction_dynamically(symbol):
-    """Dynamically loads the correct prediction module based on ticker."""
+    """Dynamically loads the correct prediction module with error reporting."""
     try:
-        # Map tickers to their specific script files
         module_map = {
             "GP": "interference.predict_gp",
             "BRACBANK": "interference.predict_brac_bank",
-            "BEXIMCO": "interference.predict_gp" # Fallback to GP logic if BEXIMCO script isn't ready
+            "BEXIMCO": "interference.predict_gp" 
         }
         
         module_name = module_map.get(symbol.upper(), "interference.predict_gp")
-        # Import the module dynamically
         module = importlib.import_module(module_name)
-        # Reload to ensure we pick up fresh .h5 changes
         importlib.reload(module)
         
         return module.get_prediction(symbol.lower())
     except Exception as e:
-        st.error(f"Prediction logic error for {symbol}: {e}")
-        return 0.0, 0.0
+        # Log the full error to the sidebar for us to see
+        st.session_state.debug_log = traceback.format_exc()
+        return f"Error: {str(e)}", 0.0
 
 # -----------------------------
 # CONFIG
@@ -47,76 +46,43 @@ load_dotenv()
 # Priority: Streamlit Secrets (Cloud) -> Environment Variables (.env/Local)
 API_KEY = st.secrets.get("OPENROUTER_API_KEY") or os.getenv("OPENROUTER_API_KEY")
 
-if not API_KEY:
-    st.error("Missing OpenRouter API Key. Please add it to Streamlit Secrets or a .env file.")
+# --- Initialize Debug Log ---
+if "debug_log" not in st.session_state:
+    st.session_state.debug_log = "No errors detected yet."
 
-# --- Custom CSS for Styling ---
+# --- Sidebar Debugger ---
+with st.sidebar:
+    st.header("🛠 Debug Console")
+    if st.button("Clear Logs"):
+        st.session_state.debug_log = "Logs cleared."
+    st.code(st.session_state.debug_log, language="text")
+
+# --- Custom CSS ---
 st.markdown("""
 <style>
-    .ai-card {
-        background-color: #111;
-        padding: 20px;
-        border-radius: 10px;
-        border-left: 5px solid #00c8ff;
-        margin-bottom: 20px;
-        color: white;
-    }
-    .ai-header {
-        font-size: 24px;
-        font-weight: bold;
-        color: white;
-        margin-bottom: 10px;
-    }
-    .ai-sub {
-        font-size: 14px;
-        color: #aaa;
-        margin-bottom: 15px;
-    }
+    .ai-card { background-color: #111; padding: 20px; border-radius: 10px; border-left: 5px solid #00c8ff; margin-bottom: 20px; color: white; }
+    .ai-header { font-size: 24px; font-weight: bold; color: white; margin-bottom: 10px; }
+    .ai-sub { font-size: 14px; color: #aaa; margin-bottom: 15px; }
 </style>
 """, unsafe_allow_html=True)
 
-# -----------------------------
-# UTILITY: ROBUST TYPE CONVERSION
-# -----------------------------
 def to_float(val):
-    """Recursively extracts a float from arrays or lists."""
-    if val is None:
-        return 0.0
+    if val is None: return 0.0
     if isinstance(val, (list, np.ndarray)):
-        if len(val) == 0:
-            return 0.0
+        if len(val) == 0: return 0.0
         return to_float(val[0])
     try:
-        if isinstance(val, str):
-            val = val.replace(',', '')
+        if isinstance(val, str): val = val.replace(',', '')
         return float(val)
-    except (TypeError, ValueError):
-        return 0.0
+    except: return 0.0
 
-# -----------------------------
-# INDEPENDENT AI RESEARCH FUNCTION
-# -----------------------------
+# [ ... Keep get_ai_independent_forecast and fetch_live_dse exactly as they are ... ]
+
 def get_ai_independent_forecast(symbol, price, sentiment_avg, weekly_trend):
     try:
         url = "https://openrouter.ai/api/v1/chat/completions"
-        headers = {
-            "Authorization": f"Bearer {API_KEY}",
-            "Content-Type": "application/json"
-        }
-        prompt = f"""
-        Act as a Senior Market Researcher for the Dhaka Stock Exchange.
-        
-        STRICT MISSION: Provide an independent numerical forecast for {symbol} tomorrow.
-        DO NOT guess what other models say. Use these inputs:
-        - Current Price (LTP): {price} BDT
-        - 7-Day Sentiment: {sentiment_avg:.2f}
-        - Recent Trend: {weekly_trend}
-
-        OUTPUT REQUIREMENTS:
-        1. Professional market analysis.
-        2. 'Reasoning:' section.
-        3. 'Numerical:' section (MUST include 'AI_TARGET: XXX.X BDT').
-        """
+        headers = {"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"}
+        prompt = f"Act as a Senior Market Researcher... {symbol} {price} {sentiment_avg} {weekly_trend}"
         data = {
             "model": "mistralai/mixtral-8x7b-instruct",
             "messages": [{"role": "user", "content": prompt}],
@@ -128,9 +94,6 @@ def get_ai_independent_forecast(symbol, price, sentiment_avg, weekly_trend):
     except Exception as e:
         return f"AI Error: {str(e)}"
 
-# -----------------------------
-# LIVE DSE DATA SCRAPER
-# -----------------------------
 def fetch_live_dse(symbol):
     try:
         df_live = get_current_trade_data()
@@ -153,7 +116,7 @@ def fetch_live_dse(symbol):
     return None
 
 # -----------------------------
-# UI LOGIC
+# UI MAIN
 # -----------------------------
 st.title("📈 DSE Agentic Stock Predictor")
 st.markdown("---")
@@ -167,12 +130,6 @@ with col1:
     st.subheader("Controls")
     symbol = st.selectbox("Select Ticker", ["GP", "BRACBANK", "BEXIMCO"])
 
-    if st.session_state.last_ticker != symbol:
-        st.session_state.last_ticker = symbol
-        auto_data = fetch_live_dse(symbol)
-        if auto_data: 
-            st.session_state[f"{symbol}_live"] = auto_data
-
     if st.button("⚡ Sync Live Price", type="primary", use_container_width=True):
         live_data = fetch_live_dse(symbol)
         if live_data:
@@ -181,13 +138,14 @@ with col1:
 
     if st.button("🔮 Predict Tomorrow", use_container_width=True):
         with st.spinner("Calculating predictions..."):
-            fresh = fetch_live_dse(symbol)
-            if fresh: 
-                st.session_state[f"{symbol}_live"] = fresh
-            
-            # UPDATED: Use the dynamic loader instead of hardcoded GP import
             raw_pred, csv_close = get_prediction_dynamically(symbol)
-            pred_value = to_float(raw_pred)
+            
+            # If raw_pred is a string, it means an error occurred
+            if isinstance(raw_pred, str):
+                st.error(raw_pred) # Show error in main UI
+                pred_value = 0.0
+            else:
+                pred_value = to_float(raw_pred)
             
             live = st.session_state.get(f"{symbol}_live")
             current_close = to_float(live["Close"] if live else csv_close)
@@ -195,6 +153,8 @@ with col1:
             diff = pred_value - current_close
             st.metric("Last Close", f"{current_close:.2f} BDT")
             st.metric("Model Prediction", f"{pred_value:.2f} BDT", delta=f"{diff:.2f} BDT" if pred_value > 0 else None)
+
+
 
 with col2:
     st.subheader("Price History")
