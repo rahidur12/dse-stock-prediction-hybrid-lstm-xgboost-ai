@@ -162,10 +162,18 @@ with col1:
             if fresh: 
                 st.session_state[f"{symbol}_live"] = fresh
             
-        raw_pred, csv_close = get_prediction(symbol)
 
-        # 🔍 ADD THIS LINE HERE
-    # SHOW FULL ERROR
+    try:
+        raw_pred, csv_close = get_prediction(symbol)
+    except Exception as e:
+        st.error(f"❌ Crash during prediction: {e}")
+        st.stop()
+
+    # ✅ Now safe check
+    if raw_pred is None:
+        st.error("❌ Model failed to load.")
+        st.stop()
+
     if isinstance(raw_pred, str):
         st.error("🚨 FULL ERROR:")
         st.code(raw_pred)
