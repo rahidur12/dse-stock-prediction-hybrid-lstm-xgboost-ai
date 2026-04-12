@@ -1,7 +1,8 @@
 streamlit
 pandas
 numpy
-tensorflow==2.15.0
+tensorflow==2.16.1
+keras==3.3.3
 xgboost
 scikit-learn
 matplotlib
