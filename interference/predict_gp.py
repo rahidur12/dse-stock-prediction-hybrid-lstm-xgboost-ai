@@ -19,7 +19,7 @@ def get_prediction(symbol="gp"):
     # --- 2. LOAD ARTIFACTS ---
     try:
         # Load the Hybrid LSTM and XGBoost models
-        lstm = load_model(os.path.join(model_dir, f"{symbol.lower()}_lstm_model.keras"))
+        lstm = load_model(os.path.join(model_dir, f"{symbol.lower()}_lstm_model.h5"))
         xgb_model = joblib.load(os.path.join(model_dir, f"{symbol.lower()}_xgb_model.pkl"))
         
         # Load the separate scalers (matches your train.py output)

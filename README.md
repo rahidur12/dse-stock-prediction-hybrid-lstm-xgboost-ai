@@ -179,11 +179,11 @@ Agentic Stock Predictor/
 │   └── predict_brac_bank.py
 │
 └── models/                         ← Saved artefacts (auto-created)
-    ├── gp_lstm_model.keras
+    ├── gp_lstm_model.h5
     ├── gp_xgb_model.pkl
     ├── gp_scaler_x.pkl
     ├── gp_scaler_y.pkl
-    ├── bracbank_lstm_model.keras
+    ├── bracbank_lstm_model.h5
     ├── bracbank_xgb_model.pkl
     ├── bracbank_scaler_x.pkl
     └── bracbank_scaler_y.pkl
@@ -236,7 +236,7 @@ DSE / bdshare ──►  stock_data_scrapper_cleaner.py
        train.py                   train.py
     (LSTM + XGBoost)           (LSTM + XGBoost)
             │                       │
-       models/*.keras           models/*.keras
+       models/*.h5           models/*.h5
        models/*.pkl             models/*.pkl
             └───────────┬───────────┘
                   interference/
