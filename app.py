@@ -82,7 +82,20 @@ def get_ai_independent_forecast(symbol, price, sentiment_avg, weekly_trend):
     try:
         url = "https://openrouter.ai/api/v1/chat/completions"
         headers = {"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"}
-        prompt = f"Act as a Senior Market Researcher... {symbol} {price} {sentiment_avg} {weekly_trend}"
+        
+        # IMPROVED PROMPT: Explicitly asking for the AI_TARGET tag
+        prompt = f"""
+        Act as a Senior Market Researcher for the Dhaka Stock Exchange.
+        Analyze the following data for {symbol}:
+        - Current Price: {price} BDT
+        - 7-Day Avg Sentiment: {sentiment_avg}
+        - Weekly Trend: {weekly_trend}
+        
+        Provide a concise market outlook. 
+        CRITICAL: You must end your response with the exact tag 'AI_TARGET: ' followed by your predicted numerical price for tomorrow.
+        Example: 'The market looks stable. AI_TARGET: 245.50'
+        """
+        
         data = {
             "model": "mistralai/mixtral-8x7b-instruct",
             "messages": [{"role": "user", "content": prompt}],
@@ -90,7 +103,12 @@ def get_ai_independent_forecast(symbol, price, sentiment_avg, weekly_trend):
         }
         response = requests.post(url, headers=headers, json=data)
         result = response.json()
-        return result["choices"][0]["message"]["content"] if "choices" in result else "AI Research Offline."
+        
+        if "choices" in result:
+            return result["choices"][0]["message"]["content"]
+        else:
+            return "AI Research Offline: Check API Quota/Key."
+            
     except Exception as e:
         return f"AI Error: {str(e)}"
 
