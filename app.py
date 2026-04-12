@@ -1,5 +1,5 @@
 # =============================
-# interference/app.py
+# app.py
 # =============================
 
 import streamlit as st
@@ -23,8 +23,7 @@ def get_prediction_dynamically(symbol):
     try:
         module_map = {
             "GP": "interference.predict_gp",
-            "BRACBANK": "interference.predict_brac_bank",
-            "BEXIMCO": "interference.predict_gp" 
+            "BRACBANK": "interference.predict_brac_bank" 
         }
         
         module_name = module_map.get(symbol.upper(), "interference.predict_gp")
@@ -49,13 +48,6 @@ API_KEY = st.secrets.get("OPENROUTER_API_KEY") or os.getenv("OPENROUTER_API_KEY"
 # --- Initialize Debug Log ---
 if "debug_log" not in st.session_state:
     st.session_state.debug_log = "No errors detected yet."
-
-# --- Sidebar Debugger ---
-with st.sidebar:
-    st.header("🛠 Debug Console")
-    if st.button("Clear Logs"):
-        st.session_state.debug_log = "Logs cleared."
-    st.code(st.session_state.debug_log, language="text")
 
 # --- Custom CSS ---
 st.markdown("""
@@ -146,7 +138,7 @@ if "last_ticker" not in st.session_state:
 
 with col1:
     st.subheader("Controls")
-    symbol = st.selectbox("Select Ticker", ["GP", "BRACBANK", "BEXIMCO"])
+    symbol = st.selectbox("Select Ticker", ["GP", "BRACBANK"])
 
     if st.button("⚡ Sync Live Price", type="primary", use_container_width=True):
         live_data = fetch_live_dse(symbol)
