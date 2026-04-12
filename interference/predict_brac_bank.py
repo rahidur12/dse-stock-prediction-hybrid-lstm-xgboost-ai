@@ -2,33 +2,23 @@
 # interference/predict_brac_bank.py
 # =============================
 
-import os
-import joblib
 import pandas as pd
 import numpy as np
-import tensorflow as tf
+import os
+import joblib
 from tensorflow.keras.models import load_model
-from tensorflow.keras.layers import Dense
 
-# --- THE FIX: FORCIBLY STRIP THE BAD KEY ---
-def fixed_get_config(self):
-    config = self.__class_config
-    config.pop('quantization_config', None)
-    return config
-
-def get_prediction(symbol="gp"):
+def get_prediction(symbol="bracbank"):
+    # --- 1. SETUP PATHS ---
     current_dir = os.path.dirname(os.path.abspath(__file__))
     project_root = os.path.dirname(current_dir)
     model_dir = os.path.join(project_root, "models")
-    
+    data_path = os.path.join(project_root, "data", f"{symbol.lower()}_final_dataset.csv")
+
+    # --- 2. LOAD ARTIFACTS ---
     try:
-        # 1. Load the model with compile=False
-        model_file = os.path.join(model_dir, f"{symbol.lower()}_lstm_model.keras")
-        
-        # This bypasses the strict config checking during loading
-        lstm = load_model(model_file, compile=False, safe_mode=False)
-    
-        # Load the rest as usual
+        # Load the Hybrid LSTM and XGBoost models
+        lstm = load_model(os.path.join(model_dir, f"{symbol.lower()}_lstm_model.keras"))
         xgb_model = joblib.load(os.path.join(model_dir, f"{symbol.lower()}_xgb_model.pkl"))
         
         # Load the separate scalers (matches your train.py output)
@@ -37,10 +27,7 @@ def get_prediction(symbol="gp"):
         
         df = pd.read_csv(data_path)
     except Exception as e:
-        import traceback
-        error_msg = traceback.format_exc()
-        print(error_msg)
-        return error_msg, None
+        return f"Error loading models/data: {e}", None
 
     # --- 3. PREPARE INPUT FEATURES ---
     # Features MUST match the order and count used in training

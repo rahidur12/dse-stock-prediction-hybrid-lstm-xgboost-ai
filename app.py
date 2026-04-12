@@ -1,4 +1,3 @@
-import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
@@ -162,28 +161,8 @@ with col1:
             if fresh: 
                 st.session_state[f"{symbol}_live"] = fresh
             
-
-    try:
-        raw_pred, csv_close = get_prediction(symbol)
-    except Exception as e:
-        st.error(f"❌ Crash during prediction: {e}")
-        st.stop()
-
-    # ✅ Now safe check
-    if raw_pred is None:
-        st.error("❌ Model failed to load.")
-        st.stop()
-
-    if isinstance(raw_pred, str):
-        st.error("🚨 FULL ERROR:")
-        st.code(raw_pred)
-        st.stop()
-
-        if raw_pred is None:
-            st.error("❌ Model loading failed. Check logs.")
-            pred_value = 0.0
-        else:
-            pred_value = float(raw_pred)
+            raw_pred, csv_close = get_prediction(symbol)
+            pred_value = to_float(raw_pred)
             
             live = st.session_state.get(f"{symbol}_live")
             current_close = to_float(live["Close"] if live else csv_close)
@@ -248,10 +227,7 @@ if st.button("🤖 Get AI Independent Research & Prediction", use_container_widt
 
             ai_raw_text = get_ai_independent_forecast(symbol, price, avg_sent, weekly_trend)
             raw_model_pred, _ = get_prediction(symbol)
-        if raw_model_pred is None:
-            model_pred = 0.0
-        else:
-            model_pred = float(raw_model_pred)
+            model_pred = to_float(raw_model_pred)
             
             st.markdown(f"""
             <div class="ai-card">
