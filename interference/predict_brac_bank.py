@@ -17,17 +17,21 @@ def get_prediction(symbol="bracbank"):
 
     # --- 2. LOAD ARTIFACTS ---
     try:
-        # Load the Hybrid LSTM and XGBoost models
-        lstm = load_model(os.path.join(model_dir, f"{symbol.lower()}_lstm_model.h5"))
-        xgb_model = joblib.load(os.path.join(model_dir, f"{symbol.lower()}_xgb_model.pkl"))
+        # Use compile=False to avoid version-specific math errors
+        # If the standard load fails, we catch it specifically
+        model_path = os.path.join(model_dir, f"{symbol.lower()}_lstm_model.h5")
         
-        # Load the separate scalers (matches your train.py output)
+        # NEW: Updated loading logic to handle the 'InputLayer' mismatch
+        lstm = load_model(model_path, compile=False, safe_mode=False)
+        
+        xgb_model = joblib.load(os.path.join(model_dir, f"{symbol.lower()}_xgb_model.pkl"))
         scaler_x = joblib.load(os.path.join(model_dir, f"{symbol.lower()}_scaler_x.pkl"))
         scaler_y = joblib.load(os.path.join(model_dir, f"{symbol.lower()}_scaler_y.pkl"))
         
         df = pd.read_csv(data_path)
     except Exception as e:
-        return f"Error loading models/data: {e}", None
+        # This will now show the detailed error in your new Debug Console
+        return f"Detailed Error: {str(e)}", None
 
     # --- 3. PREPARE INPUT FEATURES ---
     # Features MUST match the order and count used in training
