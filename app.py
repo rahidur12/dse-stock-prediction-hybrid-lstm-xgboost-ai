@@ -255,16 +255,22 @@ if st.button("🤖 Get AI Independent Research & Prediction", use_container_widt
                 st.metric("Model Target", f"{model_pred:.2f} BDT", 
                           delta=f"{m_diff:.2f} BDT" if model_pred > 0 else None)
                 
-            with right:
-                st.markdown("### 🧠 AI Independent Outlook")
-                # Look for AI_TARGET in the response text
-                ai_match = re.search(r"AI_TARGET:\s*([\d\.]+)", ai_raw_text)
-                if ai_match:
-                    ai_val = float(ai_match.group(1))
+        # --- Replacement for lines 262-268 in app.py ---
+        with right:
+            st.markdown("### 🧠 AI Independent Outlook")
+            ai_match = re.search(r"AI_TARGET:\s*([\d,.]+)", ai_raw_text)
+            
+            if ai_match:
+                try:
+                    # Clean the string: remove commas and extra text, then convert
+                    raw_val_str = ai_match.group(1).replace(',', '').strip()
+                    ai_val = float(raw_val_str)
+                    
                     a_diff = ai_val - price
                     st.metric("AI Target", f"{ai_val:.2f} BDT", delta=f"{a_diff:.2f} BDT")
-                else:
+                except ValueError:
                     st.write(f"News Sentiment: **{avg_sent:.2f}**")
-                    st.warning("Could not parse numerical AI target. Ensure prompt asks for AI_TARGET: [value]")
-    else:
-        st.error("No price data found. Please sync live data or check your data folder.")
+                    st.warning("AI provided a non-numeric target. Check raw output below.")
+            else:
+                st.write(f"News Sentiment: **{avg_sent:.2f}**")
+                st.warning("Could not parse AI_TARGET from the response.")
