@@ -1,39 +1,38 @@
-# =============================
-# interference/predict_gp.py
-# =============================
-
-import pandas as pd
-import numpy as np
-import os
-import joblib
-import importlib
-from tensorflow.keras.models import load_model
+import tensorflow as tf
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import LSTM, Dense, Input
 
 def get_prediction(symbol="gp"):
-    # --- 1. SETUP PATHS ---
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    project_root = os.path.dirname(current_dir)
-    model_dir = os.path.join(project_root, "models")
-    data_path = os.path.join(project_root, "data", f"{symbol.lower()}_final_dataset.csv")
+    # ... [Setup paths same as before] ...
 
-    # --- 2. LOAD ARTIFACTS ---
-# --- 2. LOAD ARTIFACTS ---
     try:
-        # Use compile=False to avoid version-specific math errors
-        # If the standard load fails, we catch it specifically
+        # 1. Manually define the architecture (Must match your training)
+        model = Sequential([
+            Input(shape=(1, 8)), # 1 time step, 8 features
+            LSTM(64, return_sequences=False),
+            Dense(32, activation='relu'),
+            Dense(1)
+        ])
+        
+        # 2. Load ONLY the weights from your .h5 file
+        # This ignores the 'InputLayer' config that is causing the crash
         model_path = os.path.join(model_dir, f"{symbol.lower()}_lstm_model.h5")
+        model.load_weights(model_path)
         
-        # NEW: Updated loading logic to handle the 'InputLayer' mismatch
-        lstm = load_model(model_path, compile=False, safe_mode=False)
-        
+        # 3. Load the other artifacts
         xgb_model = joblib.load(os.path.join(model_dir, f"{symbol.lower()}_xgb_model.pkl"))
         scaler_x = joblib.load(os.path.join(model_dir, f"{symbol.lower()}_scaler_x.pkl"))
         scaler_y = joblib.load(os.path.join(model_dir, f"{symbol.lower()}_scaler_y.pkl"))
         
         df = pd.read_csv(data_path)
+        
+        # Replace 'lstm' with 'model' in your prediction logic below
+        lstm = model 
+        
     except Exception as e:
-        # This will now show the detailed error in your new Debug Console
-        return f"Detailed Error: {str(e)}", None
+        return f"Weights Load Error: {str(e)}", None
+
+    # ... [Rest of your prediction logic] ...
 
     # --- 3. PREPARE INPUT FEATURES ---
     # Features MUST match the order and count used in training
