@@ -2,7 +2,7 @@ streamlit
 pandas
 numpy
 tensorflow>=2.16.1
-keras>=3.0.0
+keras==3.3.3
 xgboost
 scikit-learn
 matplotlib

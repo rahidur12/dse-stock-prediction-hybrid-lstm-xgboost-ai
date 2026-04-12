@@ -2,27 +2,31 @@
 # interference/predict_brac_bank.py
 # =============================
 
-import pandas as pd
-import numpy as np
 import os
 import joblib
+import pandas as pd
+import numpy as np
+import tensorflow as tf
 from tensorflow.keras.models import load_model
+from tensorflow.keras.layers import Dense
 
-def get_prediction(symbol="bracbank"):
-    # --- 1. SETUP PATHS ---
+# --- THE FIX: FORCIBLY STRIP THE BAD KEY ---
+def fixed_get_config(self):
+    config = self.__class_config
+    config.pop('quantization_config', None)
+    return config
+
+def get_prediction(symbol="gp"):
     current_dir = os.path.dirname(os.path.abspath(__file__))
     project_root = os.path.dirname(current_dir)
     model_dir = os.path.join(project_root, "models")
-    data_path = os.path.join(project_root, "data", f"{symbol.lower()}_final_dataset.csv")
-
-    # --- 2. LOAD ARTIFACTS ---
+    
     try:
-    # Adding compile=False bypasses the configuration check for 
-    # optimizer/loss settings that often cause version conflicts.
-        lstm = load_model(
-            os.path.join(model_dir, f"{symbol.lower()}_lstm_model.keras"),
-            compile=False
-        )
+        # 1. Load the model with compile=False
+        model_file = os.path.join(model_dir, f"{symbol.lower()}_lstm_model.keras")
+        
+        # This bypasses the strict config checking during loading
+        lstm = load_model(model_file, compile=False, safe_mode=False)
     
         # Load the rest as usual
         xgb_model = joblib.load(os.path.join(model_dir, f"{symbol.lower()}_xgb_model.pkl"))
