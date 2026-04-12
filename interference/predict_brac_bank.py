@@ -19,20 +19,20 @@ def get_prediction(symbol="gp"):
 
     # --- 2. LOAD ARTIFACTS ---
     try:
-        # Define the exact architecture used in your training
-        # 1 time step, 8 features (Open, High, Low, Close, Volume, vader, lag1, lag2)
+        # Define the architecture WITHOUT the separate Input layer 
+        # We put the input_shape directly into the LSTM layer
         model = Sequential([
-            Input(shape=(1, 8)), 
-            LSTM(64, return_sequences=False),
+            LSTM(64, input_shape=(1, 8), return_sequences=False),
             Dense(32, activation='relu'),
             Dense(1)
         ])
         
-        # Load the weights manually
         model_path = os.path.join(model_dir, f"{symbol.lower()}_lstm_model.h5")
+        
+        # We use by_name=False (default) and ensure the architecture matches
         model.load_weights(model_path)
         
-        # Load XGBoost and Scalers
+        # Load the rest
         xgb_model = joblib.load(os.path.join(model_dir, f"{symbol.lower()}_xgb_model.pkl"))
         scaler_x = joblib.load(os.path.join(model_dir, f"{symbol.lower()}_scaler_x.pkl"))
         scaler_y = joblib.load(os.path.join(model_dir, f"{symbol.lower()}_scaler_y.pkl"))
@@ -40,8 +40,8 @@ def get_prediction(symbol="gp"):
         df = pd.read_csv(data_path)
         
     except Exception as e:
-        # This will now show clearly in your app's debug console
-        return f"Prediction Script Error: {str(e)}", 0.0
+        # If it still fails, we'll see exactly why in the Debug Console
+        return f"Architecture Error: {str(e)}", 0.0
 
     # --- 3. PREPARE INPUT FEATURES ---
     features = ['Open', 'High', 'Low', 'Close', 'Volume', 'vader_score', 'vader_lag1', 'vader_lag2']
