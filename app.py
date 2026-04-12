@@ -6,7 +6,6 @@ import os
 import requests
 import re
 import importlib
-from bs4 import BeautifulSoup # Required for fallback scraping
 from dotenv import load_dotenv
 from datetime import datetime
 from bdshare import get_current_trade_data
@@ -15,79 +14,95 @@ from bdshare import get_current_trade_data
 # DYNAMIC PREDICTION LOADER
 # -----------------------------
 def get_prediction_dynamically(symbol, live_data=None):
+    """
+    Loads prediction module and passes live_data to override CSV values.
+    """
     try:
         module_map = {
             "GP": "interference.predict_gp",
             "BRACBANK": "interference.predict_brac_bank" 
         }
+        
         module_name = module_map.get(symbol.upper(), "interference.predict_gp")
         module = importlib.import_module(module_name)
         importlib.reload(module)
+        
+        # We pass live_data here so the model uses the latest DSE price
         return module.get_prediction(symbol.lower(), live_entry=live_data)
     except Exception as e:
         return f"Error: {str(e)}", 0.0
 
 # -----------------------------
-# CONFIG & UTILS
+# CONFIG & UI ASSETS
 # -----------------------------
 st.set_page_config(page_title="DSE Agentic Predictor", layout="wide")
 load_dotenv()
 API_KEY = st.secrets.get("OPENROUTER_API_KEY") or os.getenv("OPENROUTER_API_KEY")
 
+st.markdown("""
+<style>
+    .ai-card { background-color: #111; padding: 20px; border-radius: 10px; border-left: 5px solid #00c8ff; margin-bottom: 20px; color: white; }
+    .ai-header { font-size: 24px; font-weight: bold; color: white; margin-bottom: 10px; }
+    .ai-sub { font-size: 14px; color: #aaa; margin-bottom: 15px; }
+</style>
+""", unsafe_allow_html=True)
+
 def to_float(val):
-    if val is None or str(val).strip() == "--" or str(val).strip() == "": return 0.0
+    if val is None: return 0.0
     try:
         if isinstance(val, (list, np.ndarray)): val = val[0]
-        val = str(val).replace(',', '').strip()
+        if isinstance(val, str): val = val.replace(',', '')
         return float(val)
     except: return 0.0
 
 # -----------------------------
-# ROBUST LIVE FETCH (Library + Fallback Scraper)
+# CORE FUNCTIONS
 # -----------------------------
-def fetch_live_dse(symbol):
-    search_sym = symbol.upper().strip()
+def get_ai_independent_forecast(symbol, price, sentiment_avg, weekly_trend):
     try:
-        # Method 1: Try bdshare library
-        df_live = get_current_trade_data()
-        if df_live is not None and not df_live.empty:
-            # Flexible filtering for symbol names
-            row = df_live[df_live['symbol'].str.upper().str.replace(" ", "") == search_sym.replace(" ", "")]
-            if not row.empty:
-                res = row.iloc[0]
-                return {
-                    "Open": to_float(res.get('open')),
-                    "High": to_float(res.get('high')),
-                    "Low": to_float(res.get('low')),
-                    "Close": to_float(res.get('ltp')), # LTP is the real-time Close
-                    "Volume": int(to_float(res.get('volume'))),
-                    "Time": datetime.now().strftime("%I:%M %p")
-                }
-
-        # Method 2: Manual Fallback Scraper (Direct from DSE)
-        headers = {'User-Agent': 'Mozilla/5.0'}
-        url = "https://www.dsebd.org/latest_share_price_scroll_l.php"
-        response = requests.get(url, headers=headers, timeout=10)
-        soup = BeautifulSoup(response.text, 'html.parser')
+        url = "https://openrouter.ai/api/v1/chat/completions"
+        headers = {"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"}
+        prompt = f"""
+        Act as a Senior Market Researcher for the Dhaka Stock Exchange.
+        Analyze the following data for {symbol}:
+        - Current Price: {price} BDT
+        - 7-Day Avg Sentiment: {sentiment_avg}
+        - Weekly Trend: {weekly_trend}
         
-        # Scrape the table directly
-        for tr in soup.find_all('tr'):
-            tds = tr.find_all('td')
-            if len(tds) > 8 and tds[1].text.strip().upper() == search_sym:
-                return {
-                    "Open": to_float(tds[4].text),
-                    "High": to_float(tds[5].text),
-                    "Low": to_float(tds[6].text),
-                    "Close": to_float(tds[3].text), # LTP/Close
-                    "Volume": int(to_float(tds[9].text)),
-                    "Time": datetime.now().strftime("%I:%M %p")
-                }
-    except Exception as e:
-        st.error(f"Sync failed: {str(e)}")
+        Provide a concise market outlook. 
+        CRITICAL: End with 'AI_TARGET: ' followed by your predicted numerical price.
+        """
+        data = {
+            "model": "mistralai/mixtral-8x7b-instruct",
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": 0.4 
+        }
+        response = requests.post(url, headers=headers, json=data)
+        result = response.json()
+        return result["choices"][0]["message"]["content"] if "choices" in result else "AI Research Offline."
+    except Exception as e: return f"AI Error: {str(e)}"
+
+def fetch_live_dse(symbol):
+    try:
+        df_live = get_current_trade_data()
+        row = df_live[df_live['symbol'].str.upper() == symbol.upper().strip()]
+        if not row.empty:
+            res = row.iloc[0]
+            ltp = to_float(res.get('ltp', 0))
+            ycp = to_float(res.get('ycp', 0))
+            return {
+                "Open": to_float(res.get('open', 0)) if to_float(res.get('open', 0)) > 0 else ycp,
+                "High": to_float(res.get('high', 0)),
+                "Low": to_float(res.get('low', 0)),
+                "Close": ltp,
+                "Volume": to_float(res.get('volume', 0)),
+                "Time": datetime.now().strftime("%I:%M %p")
+            }
+    except: return None
     return None
 
 # -----------------------------
-# CORE LOGIC & UI
+# UI MAIN
 # -----------------------------
 st.title("📈 DSE Agentic Stock Predictor")
 st.markdown("---")
@@ -95,29 +110,26 @@ st.markdown("---")
 col1, col2 = st.columns([1, 2])
 symbol = col1.selectbox("Select Ticker", ["GP", "BRACBANK"])
 
+# 1. Sync Logic
 if col1.button("⚡ Sync Live Price", type="primary", use_container_width=True):
     live_data = fetch_live_dse(symbol)
     if live_data:
         st.session_state[f"{symbol}_live"] = live_data
-        st.success(f"Fetched {symbol} from DSE at {live_data['Time']}")
-    else:
-        st.error("Could not fetch live data. Market might be closed or DSE site is down.")
+        st.success(f"Synced {symbol} at {live_data['Time']}")
 
+# 2. Prediction Logic
 if col1.button("🔮 Predict Tomorrow", use_container_width=True):
     with st.spinner("Calculating..."):
         live = st.session_state.get(f"{symbol}_live")
+        # PASS LIVE DATA TO THE ML MODEL
         raw_pred, csv_close = get_prediction_dynamically(symbol, live_data=live)
         
         pred_value = to_float(raw_pred) if not isinstance(raw_pred, str) else 0.0
         current_close = to_float(live["Close"] if live else csv_close)
         
         diff = pred_value - current_close
-        col1.metric("Current Price Used", f"{current_close:.2f} BDT")
-        col1.metric("Model Prediction", f"{pred_value:.2f} BDT", 
-                  delta=f"{diff:.2f} BDT" if pred_value > 0 else None)
-
-# --- Historical Chart & AI Research follows same pattern as your original ---
-# [Keep the rest of your original logic for Price History and AI Research]
+        col1.metric("Last Price Used", f"{current_close:.2f} BDT")
+        col1.metric("Model Prediction", f"{pred_value:.2f} BDT", delta=f"{diff:.2f} BDT" if pred_value > 0 else None)
 
 # 3. Price History
 with col2:
