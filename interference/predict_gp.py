@@ -1,11 +1,12 @@
 # =============================
-# predict_gp.py
+# interference/predict_gp.py
 # =============================
 
 import pandas as pd
 import numpy as np
 import os
 import joblib
+import importlib
 from tensorflow.keras.models import load_model
 
 def get_prediction(symbol="gp"):
