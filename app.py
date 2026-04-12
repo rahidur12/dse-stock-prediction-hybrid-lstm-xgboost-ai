@@ -20,7 +20,12 @@ except ImportError as e:
 # -----------------------------
 st.set_page_config(page_title="DSE Agentic Predictor", layout="wide")
 load_dotenv()
-API_KEY = os.getenv("OPENROUTER_API_KEY")
+
+# Priority: Streamlit Secrets (Cloud) -> Environment Variables (.env/Local)
+API_KEY = st.secrets.get("OPENROUTER_API_KEY") or os.getenv("OPENROUTER_API_KEY")
+
+if not API_KEY:
+    st.error("Missing OpenRouter API Key. Please add it to Streamlit Secrets or a .env file.")
 
 # --- Custom CSS for Styling ---
 st.markdown("""
