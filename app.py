@@ -1,9 +1,6 @@
-# =============================
-# app.py
-# =============================
-
 import streamlit as st
 import pandas as pd
+import numpy as np  # Added for robust type handling
 import plotly.graph_objects as go
 import os
 import requests
@@ -12,6 +9,7 @@ from dotenv import load_dotenv
 from datetime import datetime
 from bdshare import get_current_trade_data
 
+# Ensure this import matches your project structure
 from interference.predict_gp import get_prediction
 
 # -----------------------------
@@ -45,6 +43,18 @@ st.markdown("""
     }
 </style>
 """, unsafe_allow_html=True)
+
+# -----------------------------
+# UTILITY: ROBUST TYPE CONVERSION
+# -----------------------------
+def to_float(val):
+    """Recursively extracts a float from arrays or lists."""
+    if isinstance(val, (list, np.ndarray)):
+        return to_float(val[0])
+    try:
+        return float(val)
+    except (TypeError, ValueError):
+        return 0.0
 
 # -----------------------------
 # INDEPENDENT AI RESEARCH FUNCTION
@@ -87,7 +97,7 @@ def get_ai_independent_forecast(symbol, price, sentiment_avg, weekly_trend):
 def fetch_live_dse(symbol):
     try:
         df_live = get_current_trade_data()
-        search_sym = "GP" if "GP" in symbol.upper() else "BRACBANK"
+        search_sym = symbol.upper() # Simplified for general use
         row = df_live[df_live['symbol'].str.upper() == search_sym]
         if not row.empty:
             res = row.iloc[0]
@@ -117,7 +127,7 @@ if "last_ticker" not in st.session_state: st.session_state.last_ticker = None
 
 with col1:
     st.subheader("Controls")
-    symbol = st.selectbox("Select Ticker", ["GP", "BRACBANK"])
+    symbol = st.selectbox("Select Ticker", ["GP", "BRACBANK", "BEXIMCO"])
 
     if st.session_state.last_ticker != symbol:
         st.session_state.last_ticker = symbol
@@ -133,11 +143,19 @@ with col1:
     if st.button("🔮 Predict Tomorrow", use_container_width=True):
         fresh = fetch_live_dse(symbol)
         if fresh: st.session_state[f"{symbol}_live"] = fresh
-        pred_value, csv_close = get_prediction(symbol)
-        live = st.session_state.get(f"{symbol}_live")
-        current_close = live["Close"] if live else csv_close
         
+        # Get raw prediction
+        raw_pred, csv_close = get_prediction(symbol)
+        
+        # FIXED: Extracting single float value
+        pred_value = to_float(raw_pred)
+        
+        live = st.session_state.get(f"{symbol}_live")
+        current_close = float(live["Close"]) if live else float(csv_close)
+        
+        # Safe subtraction
         diff = pred_value - current_close
+        
         st.metric("Last Close", f"{current_close:.2f} BDT")
         st.metric("Model Prediction", f"{pred_value:.2f} BDT", delta=f"{diff:.2f} BDT")
 
@@ -165,10 +183,22 @@ with col2:
 
         chart_df = df.tail(30).copy()
         if live:
-            live_row = pd.DataFrame([{'Date': 'Live', 'Open': disp_open, 'High': disp_high, 'Low': disp_low, 'Close': disp_close}])
+            live_row = pd.DataFrame([{
+                'Date': 'Live', 
+                'Open': disp_open, 
+                'High': disp_high, 
+                'Low': disp_low, 
+                'Close': disp_close
+            }])
             chart_df = pd.concat([chart_df, live_row], ignore_index=True)
 
-        fig = go.Figure(data=[go.Candlestick(x=chart_df['Date'], open=chart_df['Open'], high=chart_df['High'], low=chart_df['Low'], close=chart_df['Close'])])
+        fig = go.Figure(data=[go.Candlestick(
+            x=chart_df['Date'], 
+            open=chart_df['Open'], 
+            high=chart_df['High'], 
+            low=chart_df['Low'], 
+            close=chart_df['Close']
+        )])
         fig.update_layout(template="plotly_dark", height=400, margin=dict(l=0, r=0, t=10, b=0), xaxis_rangeslider_visible=False)
         st.plotly_chart(fig, use_container_width=True)
 
@@ -182,16 +212,19 @@ if st.button("🤖 Get AI Independent Research & Prediction", use_container_widt
     
     if price > 0:
         with st.spinner("AI performing independent research..."):
-            avg_sent = df['vader_score'].tail(7).mean() if df is not None else 0.0
+            avg_sent = df['vader_score'].tail(7).mean() if 'vader_score' in df.columns else 0.0
             weekly_trend = "Bullish" if df['Close'].iloc[-1] > df['Close'].iloc[-7] else "Bearish"
             ai_raw_text = get_ai_independent_forecast(symbol, price, avg_sent, weekly_trend)
-            model_pred, _ = get_prediction(symbol)
+            
+            # Extract prediction for comparison
+            raw_model_pred, _ = get_prediction(symbol)
+            model_pred = to_float(raw_model_pred)
             
             # Display Stylish AI Card
             st.markdown(f"""
             <div class="ai-card">
                 <div class="ai-header">🧠 AI Independent Research</div>
-                <div class="ai-sub">Based on educational research persona.</div>
+                <div class="ai-sub">Advanced market analysis persona.</div>
                 <div style="font-size: 15px; line-height: 1.6;">
                     {ai_raw_text}
                 </div>
@@ -208,7 +241,6 @@ if st.button("🤖 Get AI Independent Research & Prediction", use_container_widt
                 
             with right:
                 st.markdown("### 🧠 AI Independent Outlook")
-                # Restored Extraction Logic
                 ai_match = re.search(r"AI_TARGET:\s*([\d\.]+)", ai_raw_text)
                 if ai_match:
                     ai_val = float(ai_match.group(1))
@@ -218,6 +250,5 @@ if st.button("🤖 Get AI Independent Research & Prediction", use_container_widt
                     st.write(f"News Sentiment: **{avg_sent:.2f}**")
                     st.write(f"Weekly Trend: **{weekly_trend}**")
                     st.warning("Could not parse numerical AI target from text.")
-                
     else:
         st.error("Please sync live data first.")
