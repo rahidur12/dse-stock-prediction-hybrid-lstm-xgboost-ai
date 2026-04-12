@@ -166,6 +166,9 @@ with col1:
 
 
 
+# -----------------------------
+# col2: Price History & Metrics
+# -----------------------------
 with col2:
     st.subheader("Price History")
     data_path = f"data/{symbol.lower()}_final_dataset.csv"
@@ -173,22 +176,36 @@ with col2:
     
     if os.path.exists(data_path):
         df = pd.read_csv(data_path)
+        
+        # Pull the live data specifically for the selected symbol
         live = st.session_state.get(f"{symbol}_live", {})
         
+        # --- IMPROVED TIME DISPLAY ---
+        # If we have live data, show the exact sync time. 
+        # Otherwise, show the last date from the CSV.
+        if live:
+            disp_time = f"Last Synced: {live.get('Time')}"
+        else:
+            last_date_csv = df['Date'].iloc[-1] if 'Date' in df.columns else "N/A"
+            disp_time = f"Last Updated: {last_date_csv}"
+        
+        st.markdown(f"**📅 {disp_time}**") # Changed from caption to bold for better visibility
+        # -----------------------------
+
         disp_open = to_float(live.get("Open", df['Open'].iloc[-1]))
         disp_high = to_float(live.get("High", df['High'].iloc[-1]))
         disp_low = to_float(live.get("Low", df['Low'].iloc[-1]))
         disp_close = to_float(live.get("Close", df['Close'].iloc[-1]))
         disp_vol = to_float(live.get("Volume", df['Volume'].iloc[-1]))
-        disp_time = live.get("Time", "Daily Session")
         
-        st.caption(f"📅 Data Freshness: {disp_time}")
         m1, m2, m3, m4, m5 = st.columns(5)
         m1.metric("Open", f"{disp_open:.2f}")
         m2.metric("High", f"{disp_high:.2f}")
         m3.metric("Low", f"{disp_low:.2f}")
         m4.metric("Close", f"{disp_close:.2f}")
         m5.metric("Volume", f"{int(disp_vol):,}")
+
+        # ... (rest of your candlestick chart code)
 
         chart_df = df.tail(30).copy()
         if live:
