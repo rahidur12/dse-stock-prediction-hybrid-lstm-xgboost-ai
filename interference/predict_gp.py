@@ -69,4 +69,4 @@ def get_prediction(symbol="gp"):
 if __name__ == "__main__":
     # Quick debug test
     price, last = get_prediction("gp")
-    print(f"Latest Prediction: {price} BDT | Last Close: {last} BDT"),import streamlit as st
+    print(f"Latest Prediction: {price} BDT | Last Close: {last} BDT")

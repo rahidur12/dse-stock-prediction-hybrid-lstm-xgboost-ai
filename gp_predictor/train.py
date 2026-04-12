@@ -39,7 +39,7 @@ def train_gp():
     scaler_y = data_n[-2]
     scaler_x = data_n[-1]
 
-    lstm_model.save(os.path.join(model_dir, "gp_lstm_model.keras"))
+    lstm_model.save(os.path.join(model_dir, "gp_lstm_model.h5"))
     joblib.dump(xgb_model, os.path.join(model_dir, "gp_xgb_model.pkl"))
 
     with open(os.path.join(model_dir, "gp_scaler_x.pkl"), "wb") as f:
