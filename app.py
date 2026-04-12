@@ -198,8 +198,13 @@ with col2:
 # -----------------------------
 st.markdown("---")
 if st.button("🤖 Get AI Independent Research & Prediction", use_container_width=True):
+    # Try to get price from live sync first, then fallback to CSV
     live = st.session_state.get(f"{symbol}_live", {})
     price = to_float(live.get("Close", 0))
+    
+    # NEW: Fallback to CSV if live sync wasn't clicked
+    if price == 0 and df is not None:
+        price = to_float(df['Close'].iloc[-1])
     
     if price > 0:
         with st.spinner("AI performing independent research..."):
@@ -211,7 +216,7 @@ if st.button("🤖 Get AI Independent Research & Prediction", use_container_widt
 
             ai_raw_text = get_ai_independent_forecast(symbol, price, avg_sent, weekly_trend)
             
-            # UPDATED: Use the dynamic loader here too
+            # Use the dynamic loader
             raw_model_pred, _ = get_prediction_dynamically(symbol)
             model_pred = to_float(raw_model_pred)
             
@@ -229,10 +234,12 @@ if st.button("🤖 Get AI Independent Research & Prediction", use_container_widt
             with left:
                 st.markdown("### 🤖 Your ML Model")
                 m_diff = model_pred - price
-                st.metric("Model Target", f"{model_pred:.2f} BDT", delta=f"{m_diff:.2f} BDT" if model_pred > 0 else None)
+                st.metric("Model Target", f"{model_pred:.2f} BDT", 
+                          delta=f"{m_diff:.2f} BDT" if model_pred > 0 else None)
                 
             with right:
                 st.markdown("### 🧠 AI Independent Outlook")
+                # Look for AI_TARGET in the response text
                 ai_match = re.search(r"AI_TARGET:\s*([\d\.]+)", ai_raw_text)
                 if ai_match:
                     ai_val = float(ai_match.group(1))
@@ -240,6 +247,6 @@ if st.button("🤖 Get AI Independent Research & Prediction", use_container_widt
                     st.metric("AI Target", f"{ai_val:.2f} BDT", delta=f"{a_diff:.2f} BDT")
                 else:
                     st.write(f"News Sentiment: **{avg_sent:.2f}**")
-                    st.warning("Could not parse numerical AI target from text.")
+                    st.warning("Could not parse numerical AI target. Ensure prompt asks for AI_TARGET: [value]")
     else:
-        st.error("Please sync live data first.")
+        st.error("No price data found. Please sync live data or check your data folder.")
