@@ -4,6 +4,7 @@
 
 import os
 import pandas as pd
+from pygooglenews import GoogleNews
 import re
 import time
 import random

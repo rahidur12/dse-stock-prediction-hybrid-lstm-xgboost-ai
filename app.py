@@ -40,7 +40,17 @@ def get_prediction_dynamically(symbol, live_data=None):
 # -----------------------------
 st.set_page_config(page_title="DSE Agentic Predictor", layout="wide")
 load_dotenv()
-API_KEY = st.secrets.get("OPENROUTER_API_KEY") or os.getenv("OPENROUTER_API_KEY")
+#API_KEY = st.secrets.get("OPENROUTER_API_KEY") or os.getenv("OPENROUTER_API_KEY")
+# Updated Line 43 logic
+try:
+    # This works in Streamlit Cloud or if secrets.toml exists locally
+    API_KEY = st.secrets["OPENROUTER_API_KEY"]
+except Exception:
+    # Fallback to .env file for local development
+    API_KEY = os.getenv("OPENROUTER_API_KEY")
+
+if not API_KEY:
+    st.error("🔑 API Key Missing: Please add OPENROUTER_API_KEY to .env or .streamlit/secrets.toml")
 
 st.markdown("""
 <style>
@@ -111,7 +121,7 @@ st.title("📈 DSE Agentic Stock Predictor")
 st.markdown("---")
 
 col1, col2 = st.columns([1, 2])
-symbol = col1.selectbox("Select Ticker", ["GP", "BRACBANK"])
+symbol = col1.selectbox("Select Stock", ["GP", "BRACBANK"])
 
 # 1. Sync Logic
 if col1.button("⚡ Sync Live Price", type="primary", use_container_width=True):
